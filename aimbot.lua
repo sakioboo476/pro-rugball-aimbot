@@ -1,13 +1,11 @@
--- Pro Rugball Curve Aimbot with Distance Display
--- For executor use (client-side)
-
+-- Pro Rugball Curve Aimbot with Distance Display (Workspace-aware)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 
--- Create GUI for distance label
+-- GUI
 local function createDistanceLabel()
 	local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 	gui.Name = "GoalDistanceGUI"
@@ -25,11 +23,11 @@ end
 
 local label = createDistanceLabel()
 
--- Find closest InnerRing
+-- Find closest goal (InnerRing)
 local function getClosestGoal(fromPos)
 	local closest, minDist = nil, math.huge
 	for _, v in pairs(workspace:GetDescendants()) do
-		if v.Name == "InnerRing" and v:IsA("BasePart") then
+		if v:IsA("BasePart") and v.Name == "InnerRing" then
 			local dist = (v.Position - fromPos).Magnitude
 			if dist < minDist then
 				closest, minDist = v, dist
@@ -39,55 +37,75 @@ local function getClosestGoal(fromPos)
 	return closest, minDist
 end
 
--- Curve the ball to the goal
+-- Apply curve force to ball
 local function curveBall(ball, goal)
 	if not (ball and goal) then return end
 	local bv = Instance.new("BodyVelocity")
 	bv.Velocity = (goal.Position - ball.Position).Unit * 120
 	bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+	bv.P = 1250
 	bv.Parent = ball
 	Debris:AddItem(bv, 0.5)
 end
 
--- Track thrown tools
-local toolHooked = {}
+-- Detect ball in workspace
+local function waitForBallFromTool(handle)
+	local timeout = 2
+	local startTime = tick()
+	while tick() - startTime < timeout do
+		for _, obj in pairs(workspace:GetDescendants()) do
+			if obj:IsA("BasePart") and obj ~= handle and (obj.Position - handle.Position).Magnitude < 5 and obj.Name == handle.Name then
+				return obj
+			end
+		end
+		task.wait(0.05)
+	end
+end
 
+-- Tool activation
+local hooked = {}
 local function hookTool(tool)
-	if toolHooked[tool] then return end
-	toolHooked[tool] = true
+	if hooked[tool] then return end
+	hooked[tool] = true
+
 	tool.Activated:Connect(function()
 		local handle = tool:FindFirstChildWhichIsA("BasePart")
 		if not handle then return end
 
 		task.spawn(function()
-			while handle:IsDescendantOf(player.Character) do task.wait() end
-			task.wait(0.1)
+			-- Wait until handle is dropped from character
+			local waitTime = 0
+			repeat wait(0.05) waitTime += 0.05 until not handle:IsDescendantOf(player.Character) or waitTime > 1.5
+			wait(0.1)
 
-			local goal, dist = getClosestGoal(handle.Position)
-			if goal then
-				label.Text = ("Distance: %.1f studs"):format(dist)
-				if dist <= 35 and handle.Velocity.Magnitude > 10 then
-					curveBall(handle, goal)
+			local ball = waitForBallFromTool(handle)
+			if ball then
+				local goal, dist = getClosestGoal(ball.Position)
+				if goal then
+					label.Text = ("Distance: %.1f studs"):format(dist)
+					if dist <= 35 and ball.Velocity.Magnitude > 10 then
+						curveBall(ball, goal)
+					end
 				end
 			else
-				label.Text = "No Goal Found"
+				label.Text = "Ball not found in workspace"
 			end
 		end)
 	end)
 end
 
--- Hook existing & future tools
+-- Hook all existing tools
 for _, t in pairs(player.Backpack:GetChildren()) do
 	if t:IsA("Tool") then hookTool(t) end
 end
-player.Backpack.ChildAdded:Connect(function(child)
-	if child:IsA("Tool") then hookTool(child) end
+player.Backpack.ChildAdded:Connect(function(c)
+	if c:IsA("Tool") then hookTool(c) end
 end)
-char.ChildAdded:Connect(function(child)
-	if child:IsA("Tool") then hookTool(child) end
+char.ChildAdded:Connect(function(c)
+	if c:IsA("Tool") then hookTool(c) end
 end)
 
--- Update distance label in real-time
+-- Update distance constantly if holding
 RunService.RenderStepped:Connect(function()
 	local tool = char:FindFirstChildOfClass("Tool")
 	if tool then
@@ -96,8 +114,6 @@ RunService.RenderStepped:Connect(function()
 			local goal, dist = getClosestGoal(handle.Position)
 			if goal then
 				label.Text = ("Distance: %.1f studs"):format(dist)
-			else
-				label.Text = "No Goal Found"
 			end
 		end
 	end
