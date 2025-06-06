@@ -1,4 +1,4 @@
--- Pro Rugball Curve Aimbot with Distance Display (Workspace-aware)
+-- Pro Rugball Curve Aimbot with Distance Display (Backline2 Version)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
@@ -23,11 +23,11 @@ end
 
 local label = createDistanceLabel()
 
--- Find closest goal (InnerRing)
+-- Find closest goal (Backline2 is actual scoring part)
 local function getClosestGoal(fromPos)
 	local closest, minDist = nil, math.huge
 	for _, v in pairs(workspace:GetDescendants()) do
-		if v:IsA("BasePart") and v.Name == "InnerRing" then
+		if v:IsA("BasePart") and v.Name == "Backline2" then
 			local dist = (v.Position - fromPos).Magnitude
 			if dist < minDist then
 				closest, minDist = v, dist
@@ -48,7 +48,7 @@ local function curveBall(ball, goal)
 	Debris:AddItem(bv, 0.5)
 end
 
--- Detect ball in workspace
+-- Detect ball in workspace after it's thrown
 local function waitForBallFromTool(handle)
 	local timeout = 2
 	local startTime = tick()
@@ -73,7 +73,7 @@ local function hookTool(tool)
 		if not handle then return end
 
 		task.spawn(function()
-			-- Wait until handle is dropped from character
+			-- Wait until handle is detached from character
 			local waitTime = 0
 			repeat wait(0.05) waitTime += 0.05 until not handle:IsDescendantOf(player.Character) or waitTime > 1.5
 			wait(0.1)
@@ -105,7 +105,7 @@ char.ChildAdded:Connect(function(c)
 	if c:IsA("Tool") then hookTool(c) end
 end)
 
--- Update distance constantly if holding
+-- Update GUI constantly
 RunService.RenderStepped:Connect(function()
 	local tool = char:FindFirstChildOfClass("Tool")
 	if tool then
